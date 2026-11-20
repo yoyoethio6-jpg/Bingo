@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>የኤፍሬም ቢንጎ</title>
+<style>
+body{font-family:sans-serif;background:#f0f4f8;text-align:center;padding:15px}
+.box{max-width:450px;margin:auto;background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.1)}
+button{background:#2563eb;color:#fff;border:0;padding:12px 16px;font-size:16px;border-radius:8px;margin:5px;font-weight:bold}
+.red{background:#dc2626}.green{background:#16a34a;width:100%;font-size:20px;margin-top:15px}
+input{padding:12px;font-size:16px;border:1px solid #ccc;border-radius:8px;width:75%;margin-bottom:10px}
+.hide{display:none}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:15px}
+.th{background:#1e3a8a;color:#fff;padding:8px;font-weight:bold;border-radius:4px}
+.td{background:#e2e8f0;padding:12px 4px;font-size:18px;font-weight:bold;border-radius:4px}
+.mark{background:#f59e0b;color:#fff}.free{background:#10b981;color:#fff;font-size:12px}
+.num{font-size:40px;font-weight:bold;color:#dc2626;background:#fee2e2;width:90px;height:90px;line-height:90px;border-radius:50%;margin:10px auto;border:3px solid #dc2626}
+.win{background:#fef08a;border:2px solid #eab308;padding:12px;border-radius:8px;font-weight:bold;margin-bottom:10px}
+</style>
+<script src="https://gstatic.com"></script>
+<script src="https://gstatic.com"></script>
+</head>
+<body>
+<div class="box">
+<h2>🎉 የአማርኛ ቢንጎ 🎉</h2>
+<div id="home">
+<button id="bCreate">አዲስ ጨዋታ ፍጠር (አድሚን)</button><hr>
+<input id="codeIn" placeholder="የጨዋታ ኮድ ያስገቡ..."><br>
+<button id="bJoin">ጨዋታውን ተቀላቀል</button>
+</div>
+<div id="admin" class="hide">
+<div id="aWin" class="win hide"></div>
+<input id="linkOut" readonly><button id="bCopy">ሊንክ ኮፒ</button>
+<div class="num" id="aNum">-</div>
+<button id="bDraw">ቁጥር አውጣ 🎲</button>
+<button id="bReset" class="red">እንደገና ጀምር 🔄</button>
+<p>የወጡ ቁጥሮች (<span id="cnt">0</span>/75): <span id="list"></span></p>
+</div>
+<div id="player" class="hide">
+<div id="pWin" class="win hide"></div>
+<div id="pSetup"><input id="pName" placeholder="ስምዎን ያስገቡ..."><button id="bStart">ካርዴን አሳየኝ</button></div>
+<div id="pGame" class="hide">
+<p>ሰላም <b id="dName"></b>! የወጣ ቁጥር፦ <b id="pNum" style="font-size:24px;color:#dc2626">-</b></p>
+<div class="grid" id="board"><div class="th">B</div><div class="th">I</div><div class="th">N</div><div class="th">G</div><div class="th">O</div></div>
+<button id="bBingo" class="green">🏆 ቢንጎ! (BINGO!) 🏆</button>
+</div>
+</div>
+</div>
+<script>
+firebase.initializeApp({databaseURL:"https://firebaseio.com"});
+const db=firebase.database();let room="",me="",drawn=[];
+const $=id=>document.getElementById(id);
+const lettr=n=>n<=15?"B":n<=30?"I":n<=45?"N":n<=60?"G":"O";
+window.onload=()=>{let r=new URLSearchParams(location.search).get("room");if(r){room=r.toUpperCase();$("home").classList.add("hide");$("player").classList.remove("hide");listen();}};
+$("bCreate").onclick=()=>{room=Math.random().toString(36).substr(2,5).toUpperCase();$("home").classList.add("hide");$("admin").classList.remove("hide");$("linkOut").value=location.origin+location.pathname+"?room="+room;db.ref("rooms/"+room).set({n:"-",d:[],w:""});listen();};
+$("bCopy").onclick=()=>{$("linkOut").select();navigator.clipboard.writeText($("linkOut").value);alert("ሊንኩ ኮፒ ተደርጓል!");};
+$("bJoin").onclick=()=>{room=$("codeIn").value.trim().toUpperCase();if(!room)return alert("ኮድ ያስገቡ!");$("home").classList.add("hide");$("player").classList.remove("hide");listen();};
+$("bDraw").onclick=()=>{if(drawn.length>=75)return alert("አልቋል!");let n;do{n=Math.floor(Math.random()*75)+1}while(drawn.includes(n));drawn.push(n);db.ref("rooms/"+room).update({n:lettr(n)+"-"+n,d:drawn});};
+$("bReset").onclick=()=>{if(confirm("እንደገና ይጀመር?"))db.ref("rooms/"+room).set({n:"-",d:[],w:""});};
+$("bStart").onclick=()=>{me=$("pName").value.trim();if(!me)return alert("ስም ያስገቡ!");$("pSetup").classList.add("hide");$("pGame").classList.remove("hide");$("dName").innerText=me;for(let r=0;r<5;r++)for(let c=0;c<5;c++){let d=document.createElement("div");d.className="td";if(r==2&&c==2){d.innerText="ነጻ";d.className="td free mark";}else{d.innerText=Math.floor(Math.random()*15)+1+(c*15);d.onclick=()=>d.classList.toggle("mark");}$("board").appendChild(d);}};
+$("bBingo").onclick=()=>db.ref("rooms/"+room).update({w:me});
+function listen(){db.ref("rooms/"+room).on("value",s=>{let v=s.val();if(!v)return;drawn=v.d||[];$("aNum").innerText=v.n;$("pNum").innerText=v.n;$("cnt").innerText=drawn.length;$("list").innerText=drawn.map(x=>lettr(x)+"-"+x).join(", ");if(v.w){let m="🎉 "+v.w+" ቢንጎ ብለው አሸንፈዋል! 🎉";$("aWin").innerText=m;$("pWin").innerText=m;$("aWin").classList.remove("hide");$("pWin").classList.remove("hide");}else{$("aWin").classList.add("hide");$("pWin").classList.add("hide");}});}
+</script>
+</body>
+</html>
