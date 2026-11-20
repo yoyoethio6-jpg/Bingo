@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>የኤፍሬም ቢንጎ ጨዋታ</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background-color: #f0f4f8; text-align: center; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #1e3a8a; font-size: 24px; }
+        button { background-color: #2563eb; color: white; border: none; padding: 12px 18px; font-size: 16px; border-radius: 8px; cursor: pointer; margin: 5px; font-weight: bold; }
+        button:hover { background-color: #1d4ed8; }
+        button.danger { background-color: #dc2626; }
+        button.bingo-btn { background-color: #16a34a; font-size: 22px; width: 100%; margin-top: 15px; padding: 15px; }
+        input { padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; width: 75%; margin-bottom: 10px; }
+        .hidden { display: none; }
+        .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 15px; }
+        .header-cell { background-color: #1e3a8a; color: white; font-weight: bold; padding: 10px; font-size: 18px; border-radius: 5px; }
+        .cell { background-color: #e2e8f0; padding: 14px 4px; font-size: 18px; font-weight: bold; border-radius: 5px; cursor: pointer; user-select: none; }
+        .cell.marked { background-color: #f59e0b; color: white; }
+        .cell.free { background-color: #10b981; color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+        .current-number { font-size: 42px; font-weight: bold; color: #dc2626; background: #fee2e2; width: 95px; height: 95px; line-height: 95px; border-radius: 50%; margin: 15px auto; border: 4px solid #dc2626; }
+        .drawn-list { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 15px; max-height: 120px; overflow-y: auto; }
+        .drawn-badge { background: #cbd5e1; padding: 5px 10px; border-radius: 15px; font-size: 14px; font-weight: bold; }
+        .winner-banner { background-color: #fef08a; border: 2px solid #eab308; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; color: #854d0e; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎉 የአማርኛ ቢንጎ ጨዋታ 🎉</h1>
+
+    <div id="home-screen">
+        <p>ጨዋታውን ለመጀመር ከታች ካሉት አንዱን ይምረጡ፦</p>
+        <button onclick="createAdminRoom()">አዲስ ጨዋታ ፍጠር (ለአድሚን)</button>
+        <hr style="margin: 20px 0;">
+        <input type="text" id="join-code-input" placeholder="የጨዋታ ኮድ እዚህ ያስገቡ...">
+        <br>
+        <button onclick="joinAsPlayer()">ጨዋታውን ተቀላቀል</button>
+    </div>
+
+    <div id="admin-screen" class="hidden">
+        <div id="admin-winner-alert" class="winner-banner hidden"></div>
+        <p>ይህን ሊንክ ለተጫዋቾች ይላኩ፦</p>
+        <input type="text" id="share-link" readonly onclick="this.select()">
+        <button onclick="copyLink()">ሊንኩን ኮፒ አድርግ</button>
+        
+        <h3>አሁን የወጣ ቁጥር</h3>
+        <div class="current-number" id="admin-current-num">-</div>
+        
+        <button onclick="drawNumber()">አዲስ ቁጥር አውጣ 🎲</button>
+        <button class="danger" onclick="resetGame()">እንደገና ጀምር 🔄</button>
+        
+        <h4>እስካሁን የወጡ ቁጥሮች (<span id="drawn-count">0</span>/75)</h4>
+        <div class="drawn-list" id="admin-drawn-list"></div>
+    </div>
+
+    <div id="player-screen" class="hidden">
+        <div id="player-winner-alert" class="winner-banner hidden"></div>
+        
+        <div id="name-setup">
+            <input type="text" id="player-name" placeholder="ስምዎን ያስገቡ...">
+            <button onclick="startPlayerBoard()">ካርዴን አሳየኝ</button>
+        </div>
+
+        <div id="game-area" class="hidden">
+            <p>ሰላም <strong id="display-name"></strong>! የወጣውን ቁጥር ካርድዎ ላይ ይንኩት።</p>
+            <div>አሁን የወጣ ቁጥር፦ <strong id="player-current-num" style="font-size: 28px; color: #dc2626;">-</strong></div>
+            
+            <div class="board" id="bingo-board">
+                <div class="header-cell">B</div>
+                <div class="header-cell">I</div>
+                <div class="header-cell">N</div>
+                <div class="header-cell">G</div>
+                <div class="header-cell">O</div>
+            </div>
+
+            <button class="bingo-btn" onclick="claimBingo()">🏆 ቢንጎ! (BINGO!) 🏆</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://gstatic.com";
+    import { getDatabase, ref, set, onValue, update } from "https://gstatic.com";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyA46JkMG4F8WkVh-Sm8fKzm0263fCgkT_4",
+        authDomain: "://firebaseapp.com",
+        databaseURL: "https://firebaseio.com",
+        projectId: "efrem-bingo",
+        storageBucket: "efrem-bingo.firebasestorage.app",
+        messagingSenderId: "873065531257",
+        appId: "1:873065531257:web:c9ddefc6310c6b484a51a8"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let roomId = "";
+    let playerName = "";
+    let drawnNumbers = [];
+
+    window.onload = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomParam = urlParams.get('room');
+        if (roomParam) {
+            roomId = roomParam;
+            document.getElementById('home-screen').classList.add('hidden');
+            document.getElementById('player-screen').classList.remove('hidden');
+            listenToRoom();
+        }
+    };
+
+    window.createAdminRoom = () => {
+        roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
+        set(ref(db, 'rooms/' + roomId), {
+            currentNumber: "-",
+            drawnNumbers: [],
+            winner: ""
+        });
+        
+        document.getElementById('home-screen').classList.add('hidden');
+        document.getElementById('admin-screen').classList.remove('hidden');
+        
+        const shareUrl = window.location.origin + window.location.pathname + "?room=" + roomId;
+        document.getElementById('share-link').value = shareUrl;
+        listenToRoom();
+    };
+
+    window.copyLink = () => {
+        const copyText = document.getElementById("share-link");
+        copyText.select();
+        navigator.clipboard.writeText(copyText.value);
+        alert("ሊንኩ ኮፒ ተደርጓል! ለጓደኞችዎ ይላኩት።");
+    };
+
+    window.joinAsPlayer = () => {
+        const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+        if (!code) return alert("እባክዎ ኮድ ያስገቡ!");
+        roomId = code;
+        document.getElementById('home-screen').classList.add('hidden');
+        document.getElementById('player-screen').classList.remove('hidden');
+        listenToRoom();
+    };
+
+    window.drawNumber = () => {
+        if (drawnNumbers.length >= 75) return alert("ሁሉም ቁጥሮች ወጥተዋል!");
+        let num;
+        do {
+            num = Math.floor(Math.random() * 75) + 1;
+        } while (drawnNumbers.includes(num));
+
+        const letter = getBingoLetter(num);
+        const fullCall = letter + "-" + num;
+        drawnNumbers.push(num);
+
+        update(ref(db, 'rooms/' + roomId), {
+            currentNumber: fullCall,
+            drawnNumbers: drawnNumbers
+        });
+    };
+
+    window.resetGame = () => {
+        if(confirm("እርግጠኛ ነዎት ጨዋታውን እንደገና መጀመር ይፈልጋሉ?")) {
+            set(ref(db, 'rooms/' + roomId), {
+                currentNumber: "-",
+                drawnNumbers: [],
+                winner: ""
+            });
+        }
+    };
+
+    window.startPlayerBoard = () => {
+        playerName = document.getElementById('player-name').value.trim();
+        if (!playerName) return alert("እባክዎ ስምዎን ያስገቡ!");
+        
+        document.getElementById('name-setup').classList.add('hidden');
+        document.getElementById('game-area').classList.remove('hidden');
+        document.getElementById('display-name').innerText = playerName;
+        generateCard();
+    };
+
+    function generateCard() {
+        const board = document.getElementById('bingo-board');
+        let cols = [];
+
+        for (let i = 0; i < 5; i++) {
+            let nums = [];
+            let min = (i * 15) + 1;
+            let max = (i + 1) * 15;
+            while (nums.length < 5) {
+                let r = Math.floor(Math.random() * (max - min + 1)) + min;
+                if (!nums.includes(r)) nums.push(r);
+            }
+            cols.push(nums);
+        }
+
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 5; col++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                if (row === 2 && col === 2) {
+                    cell.innerText = "ነጻ\n(FREE)";
+                    cell.classList.add('free', 'marked');
+                } else {
+                    cell.innerText = cols[col][row];
+                    cell.onclick = () => cell.classList.toggle('marked');
+                }
+                board.appendChild(cell);
+            }
+        }
+    }
+
+    window.claimBingo = () => {
+        update(ref(db, 'rooms/' + roomId), {
+            winner: playerName
+        });
+    };
+
+    function listenToRoom() {
+        onValue(ref(db, 'rooms/' + roomId), (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+
+            drawnNumbers = data.drawnNumbers || [];
+            
+            document.getElementById('admin-current-num').innerText = data.currentNumber;
+            document.getElementById('drawn-count').innerText = drawnNumbers.length;
+            const listDiv = document.getElementById('admin-drawn-list');
+            listDiv.innerHTML = "";
